@@ -461,4 +461,45 @@ body {
   transition: transform 0.1s;
 }
 
-.save-btn:active { transform: scale(0.97); }
+.save-btn:active { transform: scale(0.97); }/* 追加到 App.css 末尾的新样式 */
+
+/* ========== Empty State ========== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  color: var(--text-light);
+  font-size: 15px;
+  font-style: italic;
+}
+
+.empty-clawd {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  opacity: 0.7;
+}
+
+/* ========== Thinking Animation ========== */
+.bubble.thinking {
+  color: var(--text-muted);
+  font-style: italic;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-area input:disabled {
+  opacity: 0.7;
+}

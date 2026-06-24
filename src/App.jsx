@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
+
+const API_URL = 'https://xiaoke-server.onrender.com'
 
 const quotes = [
   "Wherever you go, there you are.",
@@ -19,7 +21,11 @@ function App() {
   const [quoteIndex, setQuoteIndex] = useState(Math.floor(Math.random() * quotes.length))
   const [fadeQuote, setFadeQuote] = useState(true)
   const [activeSession, setActiveSession] = useState(0)
-  const [model, setModel] = useState('claude-sonnet-4-6')
+  const [model, setModel] = useState('anthropic/claude-sonnet-4-6')
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const messagesEndRef = useRef(null)
 
   const sessions = [
     { name: '和小克的日常' },
@@ -29,13 +35,7 @@ function App() {
     { name: 'BG3 攻略讨论' },
   ]
 
-  const mockMessages = [
-    { role: 'user', content: '小克，今天帮我理一下ACCA的复习进度吧', time: '14:32' },
-    { role: 'assistant', content: '好的小月！让我帮你梳理一下。上次你提到 F1-F3 已经过了，目前在准备 F5 和 F7 对吧？我们先看看距离考试还有多少时间，然后制定一个节奏合适的计划~', time: '14:32' },
-    { role: 'user', content: '对！就是这两门，考试大概在九月', time: '14:33' },
-    { role: 'assistant', content: '九月的话还有差不多三个月，时间不算紧但也不能太懒哦（看着你 😏）。我建议按周分配，每周重点攻一个章节，周末做真题检验……', time: '14:33' },
-  ]
-
+  // 名言轮播
   useEffect(() => {
     const timer = setInterval(() => {
       setFadeQuote(false)
@@ -47,6 +47,62 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
+  // 自动滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // 发送消息
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return
+
+    const userMsg = { role: 'user', content: input.trim(), time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
+    setMessages(prev => [...prev, userMsg])
+    setInput('')
+    setLoading(true)
+
+    try {
+      const res = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg.content, model })
+      })
+
+      const data = await res.json()
+
+      if (data.reply) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.reply,
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        }])
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '抱歉，我暂时无法回复。请稍后再试。',
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        }])
+      }
+    } catch (err) {
+      console.error('发送失败:', err)
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '网络连接出现问题，请检查后重试。',
+        time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+      }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
+  // ========== 开屏页 ==========
   if (screen === 'splash') {
     return (
       <div className="splash" onClick={() => setScreen('chat')}>
@@ -59,6 +115,7 @@ function App() {
     )
   }
 
+  // ========== 设置页 ==========
   if (screen === 'settings') {
     return (
       <div className="settings-page">
@@ -107,6 +164,7 @@ function App() {
     )
   }
 
+  // ========== 对话界面 ==========
   return (
     <div className="chat-layout">
       <div className="sidebar">
@@ -114,7 +172,7 @@ function App() {
           <img src="/clawd-happy.gif" alt="logo" />
           <span>小克之家</span>
         </div>
-        <button className="new-chat-btn">+ 新对话</button>
+        <button className="new-chat-btn" onClick={() => setMessages([])}>+ 新对话</button>
         <h3 className="sidebar-label">Recent</h3>
         <div className="session-list">
           {sessions.map((s, i) => (
@@ -131,9 +189,9 @@ function App() {
         <div className="model-select">
           <label>Model</label>
           <select value={model} onChange={e => setModel(e.target.value)}>
-            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-            <option value="claude-opus-4-6">Claude Opus 4.6</option>
-            <option value="deepseek-chat">DeepSeek</option>
+            <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+            <option value="anthropic/claude-opus-4-6">Claude Opus 4.6</option>
+            <option value="deepseek/deepseek-chat">DeepSeek</option>
           </select>
         </div>
       </div>
@@ -148,7 +206,13 @@ function App() {
         </div>
 
         <div className="messages">
-          {mockMessages.map((msg, i) => (
+          {messages.length === 0 && (
+            <div className="empty-state">
+              <img src="/clawd-idle.gif" alt="clawd" className="empty-clawd" />
+              <p>说点什么吧，小月~</p>
+            </div>
+          )}
+          {messages.map((msg, i) => (
             <div key={i} className={`msg ${msg.role}`}>
               {msg.role === 'assistant' && (
                 <div className="ai-avatar">
@@ -159,11 +223,27 @@ function App() {
               <div className="msg-time">{msg.time}</div>
             </div>
           ))}
+          {loading && (
+            <div className="msg assistant">
+              <div className="ai-avatar">
+                <img src="/clawd-juggling.gif" alt="思考中" />
+              </div>
+              <div className="bubble thinking">小克正在思考...</div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
 
         <div className="input-area">
-          <input type="text" placeholder="说点什么..." />
-          <button className="send-btn">↑</button>
+          <input
+            type="text"
+            placeholder="说点什么..."
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+          />
+          <button className="send-btn" onClick={sendMessage} disabled={loading}>↑</button>
         </div>
       </div>
     </div>
