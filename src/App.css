@@ -502,4 +502,48 @@ body {
 
 .input-area input:disabled {
   opacity: 0.7;
+}/* 追加到 App.css 末尾 */
+
+/* ========== Session Item Extras ========== */
+.session-item {
+  position: relative;
+}
+
+.session-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rename-input {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  outline: none;
+  min-width: 0;
+}
+
+.delete-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.session-item:hover .delete-btn {
+  display: block;
+}
+
+.delete-btn:hover {
+  color: #e74c3c;
 }

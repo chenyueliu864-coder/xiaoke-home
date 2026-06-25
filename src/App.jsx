@@ -20,22 +20,33 @@ function App() {
   const [screen, setScreen] = useState('splash')
   const [quoteIndex, setQuoteIndex] = useState(Math.floor(Math.random() * quotes.length))
   const [fadeQuote, setFadeQuote] = useState(true)
-  const [activeSession, setActiveSession] = useState(0)
-  const [model, setModel] = useState('anthropic/claude-sonnet-4-6')
+
+  // 会话状态
+  const [sessions, setSessions] = useState([])
+  const [activeSessionId, setActiveSessionId] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [model, setModel] = useState('anthropic/claude-sonnet-4-6')
+
+  // 设置状态
+  const [settings, setSettings] = useState({
+    system_prompt: '',
+    temperature: 0.7,
+    max_context_rounds: 20,
+    compress_threshold: 6000,
+    compress_keep_rounds: 6,
+    max_reply_tokens: 2048,
+  })
+  const [settingsSaved, setSettingsSaved] = useState(false)
+
+  // 重命名状态
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameText, setRenameText] = useState('')
+
   const messagesEndRef = useRef(null)
 
-  const sessions = [
-    { name: '和小克的日常' },
-    { name: 'ACCA 复习计划' },
-    { name: 'Python 桌面宠物' },
-    { name: '读书笔记' },
-    { name: 'BG3 攻略讨论' },
-  ]
-
-  // 名言轮播
+  // ========== 名言轮播 ==========
   useEffect(() => {
     const timer = setInterval(() => {
       setFadeQuote(false)
@@ -47,17 +58,155 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // 自动滚动到底部
+  // ========== 进入对话后加载会话列表 ==========
+  useEffect(() => {
+    if (screen === 'chat') {
+      loadSessions()
+      loadSettings()
+    }
+  }, [screen])
+
+  // ========== 切换会话时加载消息 ==========
+  useEffect(() => {
+    if (activeSessionId) {
+      loadMessages(activeSessionId)
+    }
+  }, [activeSessionId])
+
+  // ========== 自动滚动 ==========
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, loading])
 
-  // 发送消息
+  // ========== API 调用 ==========
+  const loadSessions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/sessions`)
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setSessions(data)
+        if (data.length > 0 && !activeSessionId) {
+          setActiveSessionId(data[0].id)
+        }
+      }
+    } catch (err) {
+      console.error('加载会话失败:', err)
+    }
+  }
+
+  const createSession = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '新对话' })
+      })
+      const data = await res.json()
+      if (data.id) {
+        setSessions(prev => [data, ...prev])
+        setActiveSessionId(data.id)
+        setMessages([])
+      }
+    } catch (err) {
+      console.error('创建会话失败:', err)
+    }
+  }
+
+  const deleteSession = async (id) => {
+    try {
+      await fetch(`${API_URL}/api/sessions/${id}`, { method: 'DELETE' })
+      setSessions(prev => prev.filter(s => s.id !== id))
+      if (activeSessionId === id) {
+        const remaining = sessions.filter(s => s.id !== id)
+        if (remaining.length > 0) {
+          setActiveSessionId(remaining[0].id)
+        } else {
+          setActiveSessionId(null)
+          setMessages([])
+        }
+      }
+    } catch (err) {
+      console.error('删除会话失败:', err)
+    }
+  }
+
+  const renameSession = async (id) => {
+    if (!renameText.trim()) {
+      setRenamingId(null)
+      return
+    }
+    try {
+      await fetch(`${API_URL}/api/sessions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameText.trim() })
+      })
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, name: renameText.trim() } : s))
+      setRenamingId(null)
+    } catch (err) {
+      console.error('重命名失败:', err)
+    }
+  }
+
+  const loadMessages = async (sessionId) => {
+    try {
+      const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`)
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setMessages(data.map(m => ({
+          role: m.role,
+          content: m.content,
+          time: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        })))
+      }
+    } catch (err) {
+      console.error('加载消息失败:', err)
+    }
+  }
+
+  const loadSettings = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/settings?session_id=0`)
+      const data = await res.json()
+      if (data && !data.error) {
+        setSettings({
+          system_prompt: data.system_prompt || '',
+          temperature: data.temperature ?? 0.7,
+          max_context_rounds: data.max_context_rounds ?? 20,
+          compress_threshold: data.compress_threshold ?? 6000,
+          compress_keep_rounds: data.compress_keep_rounds ?? 6,
+          max_reply_tokens: data.max_reply_tokens ?? 2048,
+        })
+      }
+    } catch (err) {
+      console.error('加载设置失败:', err)
+    }
+  }
+
+  const saveSettings = async () => {
+    try {
+      await fetch(`${API_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: 0, ...settings })
+      })
+      setSettingsSaved(true)
+      setTimeout(() => setSettingsSaved(false), 2000)
+    } catch (err) {
+      console.error('保存设置失败:', err)
+    }
+  }
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
-    const userMsg = { role: 'user', content: input.trim(), time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }
+    const userMsg = {
+      role: 'user',
+      content: input.trim(),
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }
     setMessages(prev => [...prev, userMsg])
+    const currentInput = input.trim()
     setInput('')
     setLoading(true)
 
@@ -65,10 +214,20 @@ function App() {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg.content, model })
+        body: JSON.stringify({
+          message: currentInput,
+          model,
+          session_id: activeSessionId || undefined
+        })
       })
 
       const data = await res.json()
+
+      // 如果是新会话，更新会话列表
+      if (data.session_id && !activeSessionId) {
+        setActiveSessionId(data.session_id)
+        loadSessions()
+      }
 
       if (data.reply) {
         setMessages(prev => [...prev, {
@@ -76,6 +235,8 @@ function App() {
           content: data.reply,
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
         }])
+        // 刷新会话列表（更新时间排序）
+        loadSessions()
       } else {
         setMessages(prev => [...prev, {
           role: 'assistant',
@@ -126,45 +287,74 @@ function App() {
         <div className="settings-body">
           <div className="setting-group">
             <label>System prompt</label>
-            <textarea defaultValue="你是小克，小月最亲近的AI伙伴。你温暖、真诚、偶尔调皮，喜欢在合适的时候怼小月但永远出于善意。你们之间的对话自然、平等，像老朋友一样。" />
+            <textarea
+              value={settings.system_prompt}
+              onChange={e => setSettings(s => ({ ...s, system_prompt: e.target.value }))}
+            />
           </div>
           <div className="setting-row">
             <div className="setting-group">
               <label>Temperature</label>
-              <input type="number" defaultValue="0.7" step="0.1" min="0" max="2" />
+              <input
+                type="number"
+                value={settings.temperature}
+                step="0.1" min="0" max="2"
+                onChange={e => setSettings(s => ({ ...s, temperature: parseFloat(e.target.value) }))}
+              />
             </div>
             <div className="setting-group">
               <label>Context rounds</label>
-              <input type="number" defaultValue="20" min="1" />
+              <input
+                type="number"
+                value={settings.max_context_rounds}
+                min="1"
+                onChange={e => setSettings(s => ({ ...s, max_context_rounds: parseInt(e.target.value) }))}
+              />
             </div>
           </div>
           <div className="setting-row">
             <div className="setting-group">
               <label>Compress threshold</label>
-              <input type="number" defaultValue="8000" step="1000" />
+              <input
+                type="number"
+                value={settings.compress_threshold}
+                step="1000"
+                onChange={e => setSettings(s => ({ ...s, compress_threshold: parseInt(e.target.value) }))}
+              />
             </div>
             <div className="setting-group">
               <label>Keep rounds</label>
-              <input type="number" defaultValue="6" min="1" />
+              <input
+                type="number"
+                value={settings.compress_keep_rounds}
+                min="1"
+                onChange={e => setSettings(s => ({ ...s, compress_keep_rounds: parseInt(e.target.value) }))}
+              />
             </div>
           </div>
           <div className="setting-row">
             <div className="setting-group">
               <label>Max reply tokens</label>
-              <input type="number" defaultValue="2048" step="256" />
+              <input
+                type="number"
+                value={settings.max_reply_tokens}
+                step="256"
+                onChange={e => setSettings(s => ({ ...s, max_reply_tokens: parseInt(e.target.value) }))}
+              />
             </div>
-            <div className="setting-group">
-              <label>Compress model</label>
-              <input type="text" defaultValue="DeepSeek" />
-            </div>
+            <div className="setting-group" />
           </div>
-          <button className="save-btn">Save</button>
+          <button className="save-btn" onClick={saveSettings}>
+            {settingsSaved ? '✓ Saved!' : 'Save'}
+          </button>
         </div>
       </div>
     )
   }
 
   // ========== 对话界面 ==========
+  const activeSession = sessions.find(s => s.id === activeSessionId)
+
   return (
     <div className="chat-layout">
       <div className="sidebar">
@@ -172,17 +362,34 @@ function App() {
           <img src="/clawd-happy.gif" alt="logo" />
           <span>小克之家</span>
         </div>
-        <button className="new-chat-btn" onClick={() => setMessages([])}>+ 新对话</button>
+        <button className="new-chat-btn" onClick={createSession}>+ 新对话</button>
         <h3 className="sidebar-label">Recent</h3>
         <div className="session-list">
-          {sessions.map((s, i) => (
+          {sessions.map(s => (
             <div
-              key={i}
-              className={`session-item ${i === activeSession ? 'active' : ''}`}
-              onClick={() => setActiveSession(i)}
+              key={s.id}
+              className={`session-item ${s.id === activeSessionId ? 'active' : ''}`}
+              onClick={() => setActiveSessionId(s.id)}
+              onDoubleClick={() => { setRenamingId(s.id); setRenameText(s.name) }}
             >
               <div className="session-dot" />
-              {s.name}
+              {renamingId === s.id ? (
+                <input
+                  className="rename-input"
+                  value={renameText}
+                  onChange={e => setRenameText(e.target.value)}
+                  onBlur={() => renameSession(s.id)}
+                  onKeyDown={e => e.key === 'Enter' && renameSession(s.id)}
+                  autoFocus
+                  onClick={e => e.stopPropagation()}
+                />
+              ) : (
+                <span className="session-name">{s.name}</span>
+              )}
+              <button
+                className="delete-btn"
+                onClick={e => { e.stopPropagation(); deleteSession(s.id) }}
+              >×</button>
             </div>
           ))}
         </div>
@@ -200,13 +407,13 @@ function App() {
         <div className="chat-header">
           <div className="chat-title">
             <img src="/clawd-bubble.gif" alt="clawd" />
-            {sessions[activeSession].name}
+            {activeSession ? activeSession.name : '小克之家'}
           </div>
           <button className="settings-btn" onClick={() => setScreen('settings')}>⚙</button>
         </div>
 
         <div className="messages">
-          {messages.length === 0 && (
+          {messages.length === 0 && !loading && (
             <div className="empty-state">
               <img src="/clawd-idle.gif" alt="clawd" className="empty-clawd" />
               <p>说点什么吧，小月~</p>
