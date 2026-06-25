@@ -264,11 +264,13 @@ function App() {
   if (screen === 'splash') {
     return (
       <div className="splash" onClick={() => setScreen('chat')}>
-        <img src="/clawd-idle.gif" className="splash-clawd" alt="Clawd" />
-        <p className={`splash-quote ${fadeQuote ? 'visible' : ''}`}>
-          {quotes[quoteIndex]}
-        </p>
-        <span className="splash-hint">tap anywhere to enter</span>
+        <div className="splash-card">
+          <img src="/clawd-idle.gif" className="splash-clawd" alt="Clawd" />
+          <p className={`splash-quote ${fadeQuote ? 'visible' : ''}`}>
+            {quotes[quoteIndex]}
+          </p>
+          <span className="splash-hint">tap anywhere to enter</span>
+        </div>
       </div>
     )
   }
@@ -405,6 +407,7 @@ function App() {
             <option value="deepseek/deepseek-chat">DeepSeek</option>
           </select>
         </div>
+        <img src="/decor-cloud.jpg" alt="" className="sidebar-cloud" />
       </div>
 
       <div className="chat-main">
@@ -418,8 +421,10 @@ function App() {
         </div>
 
         <div className="messages">
+          <img src="/decor-moon.jpg" alt="" className="messages-moon" />
           {messages.length === 0 && !loading && (
             <div className="empty-state">
+              <img src="/decor-crystal.jpg" alt="" className="empty-crystal" />
               <img src="/clawd-idle.gif" alt="clawd" className="empty-clawd" />
               <p>说点什么吧，小月~</p>
             </div>
@@ -440,7 +445,12 @@ function App() {
               <div className="ai-avatar">
                 <img src="/clawd-juggling.gif" alt="思考中" />
               </div>
-              <div className="bubble thinking">小克正在思考...</div>
+              <div className="bubble thinking">
+                <div className="thinking-wrapper">
+                  <img src="/decor-star.jpg" alt="" className="thinking-star" />
+                  <span>小克正在思考...</span>
+                </div>
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
