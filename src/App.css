@@ -3,8 +3,8 @@
   --accent: #D4845A;
   --accent-light: #F5E6DB;
   --accent-dark: #A85C35;
-  --bg-main: #FAF8F5;
-  --bg-sidebar: #F3F0EB;
+  --bg-main: #FFFBF5;
+  --bg-sidebar: #F0DCC8;
   --bg-msg-user: #E8DED3;
   --bg-msg-ai: #FFFFFF;
   --text-main: #2C2925;
@@ -19,7 +19,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'LXGW WenKai', cursive, sans-serif;
   color: var(--text-main);
   background: var(--bg-main);
 }
@@ -45,8 +45,8 @@ body {
 }
 
 .splash-clawd {
-  width: 120px;
-  height: 120px;
+  width: 160px;
+  height: 160px;
   object-fit: contain;
   animation: float 3s ease-in-out infinite;
 }
@@ -57,9 +57,9 @@ body {
 }
 
 .splash-quote {
-  font-size: 16px;
+  font-size: 20px;
   color: var(--text-muted);
-  max-width: 360px;
+  max-width: 400px;
   text-align: center;
   line-height: 1.8;
   font-style: italic;
@@ -75,6 +75,12 @@ body {
   font-size: 12px;
   color: var(--text-light);
   letter-spacing: 1px;
+  animation: breathe 2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* ========== Chat Layout ========== */
@@ -82,6 +88,24 @@ body {
   display: flex;
   height: 100vh;
   background: var(--bg-main);
+}
+
+/* ========== Hamburger Button ========== */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.12s;
+}
+
+.hamburger-btn:hover {
+  color: var(--accent);
+  background: var(--accent-light);
 }
 
 /* ========== Sidebar ========== */
@@ -161,6 +185,7 @@ body {
   align-items: center;
   gap: 8px;
   transition: all 0.12s;
+  position: relative;
 }
 
 .session-item:hover { background: rgba(0, 0, 0, 0.04); }
@@ -181,6 +206,40 @@ body {
 }
 
 .session-item.active .session-dot { opacity: 1; }
+
+.session-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rename-input {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  outline: none;
+  min-width: 0;
+}
+
+.delete-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.session-item:hover .delete-btn { display: block; }
+.delete-btn:hover { color: #e74c3c; }
 
 .model-select {
   margin-top: auto;
@@ -210,6 +269,11 @@ body {
 }
 
 .model-select select:focus { border-color: var(--accent); }
+
+/* ========== Sidebar Overlay (mobile) ========== */
+.sidebar-overlay {
+  display: none;
+}
 
 /* ========== Chat Main ========== */
 .chat-main {
@@ -265,6 +329,35 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  position: relative;
+  background:
+    radial-gradient(1px 1px at 10% 15%, rgba(210, 160, 100, 0.15), transparent),
+    radial-gradient(1.5px 1.5px at 25% 40%, rgba(210, 160, 100, 0.12), transparent),
+    radial-gradient(1px 1px at 45% 10%, rgba(210, 160, 100, 0.15), transparent),
+    radial-gradient(2px 2px at 60% 55%, rgba(210, 160, 100, 0.1), transparent),
+    radial-gradient(1px 1px at 75% 25%, rgba(210, 160, 100, 0.15), transparent),
+    radial-gradient(1.5px 1.5px at 85% 70%, rgba(210, 160, 100, 0.12), transparent),
+    radial-gradient(1px 1px at 15% 80%, rgba(210, 160, 100, 0.15), transparent),
+    radial-gradient(1px 1px at 35% 65%, rgba(210, 160, 100, 0.12), transparent),
+    radial-gradient(2px 2px at 55% 85%, rgba(210, 160, 100, 0.1), transparent),
+    radial-gradient(1px 1px at 90% 45%, rgba(210, 160, 100, 0.15), transparent),
+    radial-gradient(1.5px 1.5px at 5% 50%, rgba(210, 160, 100, 0.12), transparent),
+    radial-gradient(1px 1px at 70% 90%, rgba(210, 160, 100, 0.15), transparent),
+    var(--bg-main);
+}
+
+.messages::after {
+  content: '';
+  position: fixed;
+  top: 60px;
+  right: 40px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  box-shadow: -10px 6px 0 0 var(--bg-main);
+  background: rgba(212, 132, 90, 0.08);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .msg {
@@ -272,6 +365,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  position: relative;
+  z-index: 1;
 }
 
 .msg.user { align-self: flex-end; }
@@ -316,6 +411,40 @@ body {
   object-fit: contain;
 }
 
+/* ========== Empty State ========== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  color: var(--text-light);
+  font-size: 18px;
+  font-style: italic;
+  position: relative;
+  z-index: 1;
+}
+
+.empty-clawd {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  opacity: 0.7;
+}
+
+/* ========== Thinking Animation ========== */
+.bubble.thinking {
+  color: var(--text-muted);
+  font-style: italic;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* ========== Input ========== */
 .input-area {
   padding: 14px 20px;
@@ -327,7 +456,7 @@ body {
 
 .input-area input {
   flex: 1;
-  padding: 12px 18px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 24px;
   font-size: 14px;
@@ -340,23 +469,34 @@ body {
 
 .input-area input:focus { border-color: var(--accent); }
 
+.input-area input:disabled { opacity: 0.7; }
+
 .send-btn {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
   border: none;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s;
+  transition: transform 0.1s, background 0.15s;
   flex-shrink: 0;
 }
 
 .send-btn:active { transform: scale(0.92); }
+
+.send-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.send-btn.has-input {
+  background: var(--accent);
+}
 
 /* ========== Settings ========== */
 .settings-page {
@@ -404,6 +544,23 @@ body {
   max-width: 600px;
 }
 
+.settings-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-dark);
+  margin-bottom: 4px;
+}
+
 .setting-group {
   display: flex;
   flex-direction: column;
@@ -414,7 +571,6 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   font-weight: 500;
-  text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
@@ -461,89 +617,50 @@ body {
   transition: transform 0.1s;
 }
 
-.save-btn:active { transform: scale(0.97); }/* 追加到 App.css 末尾的新样式 */
+.save-btn:active { transform: scale(0.97); }
 
-/* ========== Empty State ========== */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  gap: 16px;
-  color: var(--text-light);
-  font-size: 15px;
-  font-style: italic;
-}
+/* ========== Mobile Responsive ========== */
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: block;
+  }
 
-.empty-clawd {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  opacity: 0.7;
-}
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: none;
+  }
 
-/* ========== Thinking Animation ========== */
-.bubble.thinking {
-  color: var(--text-muted);
-  font-style: italic;
-  animation: pulse 1.5s ease-in-out infinite;
-}
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+  }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 999;
+  }
 
-.send-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+  .sidebar-overlay.visible {
+    display: block;
+  }
 
-.input-area input:disabled {
-  opacity: 0.7;
-}/* 追加到 App.css 末尾 */
+  .msg {
+    max-width: 88%;
+  }
 
-/* ========== Session Item Extras ========== */
-.session-item {
-  position: relative;
-}
-
-.session-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rename-input {
-  flex: 1;
-  padding: 2px 6px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: inherit;
-  background: #fff;
-  outline: none;
-  min-width: 0;
-}
-
-.delete-btn {
-  display: none;
-  background: none;
-  border: none;
-  color: var(--text-light);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.session-item:hover .delete-btn {
-  display: block;
-}
-
-.delete-btn:hover {
-  color: #e74c3c;
+  .setting-row {
+    grid-template-columns: 1fr;
+  }
 }

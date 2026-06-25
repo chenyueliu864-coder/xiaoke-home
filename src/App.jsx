@@ -21,15 +21,14 @@ function App() {
   const [quoteIndex, setQuoteIndex] = useState(Math.floor(Math.random() * quotes.length))
   const [fadeQuote, setFadeQuote] = useState(true)
 
-  // 会话状态
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [model, setModel] = useState('anthropic/claude-sonnet-4-6')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // 设置状态
   const [settings, setSettings] = useState({
     system_prompt: '',
     temperature: 0.7,
@@ -40,13 +39,11 @@ function App() {
   })
   const [settingsSaved, setSettingsSaved] = useState(false)
 
-  // 重命名状态
   const [renamingId, setRenamingId] = useState(null)
   const [renameText, setRenameText] = useState('')
 
   const messagesEndRef = useRef(null)
 
-  // ========== 名言轮播 ==========
   useEffect(() => {
     const timer = setInterval(() => {
       setFadeQuote(false)
@@ -58,7 +55,6 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // ========== 进入对话后加载会话列表 ==========
   useEffect(() => {
     if (screen === 'chat') {
       loadSessions()
@@ -66,19 +62,16 @@ function App() {
     }
   }, [screen])
 
-  // ========== 切换会话时加载消息 ==========
   useEffect(() => {
     if (activeSessionId) {
       loadMessages(activeSessionId)
     }
   }, [activeSessionId])
 
-  // ========== 自动滚动 ==========
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // ========== API 调用 ==========
   const loadSessions = async () => {
     try {
       const res = await fetch(`${API_URL}/api/sessions`)
@@ -106,6 +99,7 @@ function App() {
         setSessions(prev => [data, ...prev])
         setActiveSessionId(data.id)
         setMessages([])
+        setSidebarOpen(false)
       }
     } catch (err) {
       console.error('创建会话失败:', err)
@@ -223,7 +217,6 @@ function App() {
 
       const data = await res.json()
 
-      // 如果是新会话，更新会话列表
       if (data.session_id && !activeSessionId) {
         setActiveSessionId(data.session_id)
         loadSessions()
@@ -235,7 +228,6 @@ function App() {
           content: data.reply,
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
         }])
-        // 刷新会话列表（更新时间排序）
         loadSessions()
       } else {
         setMessages(prev => [...prev, {
@@ -263,7 +255,12 @@ function App() {
     }
   }
 
-  // ========== 开屏页 ==========
+  const selectSession = (id) => {
+    setActiveSessionId(id)
+    setSidebarOpen(false)
+  }
+
+  // ========== Splash ==========
   if (screen === 'splash') {
     return (
       <div className="splash" onClick={() => setScreen('chat')}>
@@ -276,91 +273,98 @@ function App() {
     )
   }
 
-  // ========== 设置页 ==========
+  // ========== Settings ==========
   if (screen === 'settings') {
     return (
       <div className="settings-page">
         <div className="settings-header">
           <button className="back-btn" onClick={() => setScreen('chat')}>←</button>
-          <h2>Settings</h2>
+          <h2>设置</h2>
         </div>
         <div className="settings-body">
-          <div className="setting-group">
-            <label>System prompt</label>
-            <textarea
-              value={settings.system_prompt}
-              onChange={e => setSettings(s => ({ ...s, system_prompt: e.target.value }))}
-            />
-          </div>
-          <div className="setting-row">
+          <div className="settings-card">
+            <div className="settings-card-title">提示词</div>
             <div className="setting-group">
-              <label>Temperature</label>
-              <input
-                type="number"
-                value={settings.temperature}
-                step="0.1" min="0" max="2"
-                onChange={e => setSettings(s => ({ ...s, temperature: parseFloat(e.target.value) }))}
-              />
-            </div>
-            <div className="setting-group">
-              <label>Context rounds</label>
-              <input
-                type="number"
-                value={settings.max_context_rounds}
-                min="1"
-                onChange={e => setSettings(s => ({ ...s, max_context_rounds: parseInt(e.target.value) }))}
+              <label>系统提示词</label>
+              <textarea
+                value={settings.system_prompt}
+                onChange={e => setSettings(s => ({ ...s, system_prompt: e.target.value }))}
               />
             </div>
           </div>
-          <div className="setting-row">
-            <div className="setting-group">
-              <label>Compress threshold</label>
-              <input
-                type="number"
-                value={settings.compress_threshold}
-                step="1000"
-                onChange={e => setSettings(s => ({ ...s, compress_threshold: parseInt(e.target.value) }))}
-              />
+          <div className="settings-card">
+            <div className="settings-card-title">参数配置</div>
+            <div className="setting-row">
+              <div className="setting-group">
+                <label>温度</label>
+                <input
+                  type="number"
+                  value={settings.temperature}
+                  step="0.1" min="0" max="2"
+                  onChange={e => setSettings(s => ({ ...s, temperature: parseFloat(e.target.value) }))}
+                />
+              </div>
+              <div className="setting-group">
+                <label>上下文轮数</label>
+                <input
+                  type="number"
+                  value={settings.max_context_rounds}
+                  min="1"
+                  onChange={e => setSettings(s => ({ ...s, max_context_rounds: parseInt(e.target.value) }))}
+                />
+              </div>
             </div>
-            <div className="setting-group">
-              <label>Keep rounds</label>
-              <input
-                type="number"
-                value={settings.compress_keep_rounds}
-                min="1"
-                onChange={e => setSettings(s => ({ ...s, compress_keep_rounds: parseInt(e.target.value) }))}
-              />
+            <div className="setting-row">
+              <div className="setting-group">
+                <label>压缩阈值</label>
+                <input
+                  type="number"
+                  value={settings.compress_threshold}
+                  step="1000"
+                  onChange={e => setSettings(s => ({ ...s, compress_threshold: parseInt(e.target.value) }))}
+                />
+              </div>
+              <div className="setting-group">
+                <label>保留轮数</label>
+                <input
+                  type="number"
+                  value={settings.compress_keep_rounds}
+                  min="1"
+                  onChange={e => setSettings(s => ({ ...s, compress_keep_rounds: parseInt(e.target.value) }))}
+                />
+              </div>
             </div>
-          </div>
-          <div className="setting-row">
-            <div className="setting-group">
-              <label>Max reply tokens</label>
-              <input
-                type="number"
-                value={settings.max_reply_tokens}
-                step="256"
-                onChange={e => setSettings(s => ({ ...s, max_reply_tokens: parseInt(e.target.value) }))}
-              />
+            <div className="setting-row">
+              <div className="setting-group">
+                <label>最大回复长度</label>
+                <input
+                  type="number"
+                  value={settings.max_reply_tokens}
+                  step="256"
+                  onChange={e => setSettings(s => ({ ...s, max_reply_tokens: parseInt(e.target.value) }))}
+                />
+              </div>
+              <div className="setting-group" />
             </div>
-            <div className="setting-group" />
           </div>
           <button className="save-btn" onClick={saveSettings}>
-            {settingsSaved ? '✓ Saved!' : 'Save'}
+            {settingsSaved ? '✓ 已保存' : '保存'}
           </button>
         </div>
       </div>
     )
   }
 
-  // ========== 对话界面 ==========
+  // ========== Chat ==========
   const activeSession = sessions.find(s => s.id === activeSessionId)
 
   return (
     <div className="chat-layout">
-      <div className="sidebar">
+      <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)} />
+      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <img src="/clawd-happy.gif" alt="logo" />
-          <span>小克之家</span>
+          <span>Hearthstone</span>
         </div>
         <button className="new-chat-btn" onClick={createSession}>+ 新对话</button>
         <h3 className="sidebar-label">Recent</h3>
@@ -369,7 +373,7 @@ function App() {
             <div
               key={s.id}
               className={`session-item ${s.id === activeSessionId ? 'active' : ''}`}
-              onClick={() => setActiveSessionId(s.id)}
+              onClick={() => selectSession(s.id)}
               onDoubleClick={() => { setRenamingId(s.id); setRenameText(s.name) }}
             >
               <div className="session-dot" />
@@ -406,8 +410,9 @@ function App() {
       <div className="chat-main">
         <div className="chat-header">
           <div className="chat-title">
+            <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
             <img src="/clawd-bubble.gif" alt="clawd" />
-            {activeSession ? activeSession.name : '小克之家'}
+            {activeSession ? activeSession.name : 'Hearthstone'}
           </div>
           <button className="settings-btn" onClick={() => setScreen('settings')}>⚙</button>
         </div>
@@ -450,7 +455,11 @@ function App() {
             onKeyDown={handleKeyDown}
             disabled={loading}
           />
-          <button className="send-btn" onClick={sendMessage} disabled={loading}>↑</button>
+          <button
+            className={`send-btn ${input.trim() ? 'has-input' : ''}`}
+            onClick={sendMessage}
+            disabled={loading || !input.trim()}
+          >↑</button>
         </div>
       </div>
     </div>
