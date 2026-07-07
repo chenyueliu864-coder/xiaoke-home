@@ -16,10 +16,52 @@ const quotes = [
   "I think, therefore I am.",
 ]
 
+const THEMES = [
+  { id: 'warmnight', label: '暖夜风' },
+  { id: 'pearl', label: '珍珠' },
+  { id: 'harbor', label: '海港' },
+]
+
+// 提取 <think>...</think> 思考块，返回 { think, body }
+function splitThink(content) {
+  const m = content.match(/^<think>([\s\S]*?)<\/think>\s*/)
+  if (m) return { think: m[1].trim(), body: content.slice(m[0].length) }
+  return { think: null, body: content }
+}
+
+// 逐字渲染动画（前端打字机兜底，后端 SSE 后续再加）
+function Typewriter({ text, onDone }) {
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    if (shown >= text.length) { onDone?.(); return }
+    const step = Math.max(1, Math.floor(text.length / 120))
+    const t = setTimeout(() => setShown(s => Math.min(text.length, s + step)), 16)
+    return () => clearTimeout(t)
+  }, [shown, text, onDone])
+  return <>{text.slice(0, shown)}</>
+}
+
+function MessageBubble({ msg, animate, onAnimDone }) {
+  const { think, body } = splitThink(msg.content)
+  return (
+    <div className="bubble">
+      {think && (
+        <details className="think-fold">
+          <summary>思考过程</summary>
+          <div className="think-fold-body">{think}</div>
+        </details>
+      )}
+      {animate ? <Typewriter text={body} onDone={onAnimDone} /> : body}
+    </div>
+  )
+}
+
 function App() {
   const [screen, setScreen] = useState('splash')
   const [quoteIndex, setQuoteIndex] = useState(Math.floor(Math.random() * quotes.length))
   const [fadeQuote, setFadeQuote] = useState(true)
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('xiaoke-theme') || 'warmnight')
 
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
@@ -28,6 +70,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [model, setModel] = useState('anthropic/claude-sonnet-4-6')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [animatingIdx, setAnimatingIdx] = useState(-1)
 
   const [settings, setSettings] = useState({
     system_prompt: '',
@@ -39,10 +82,18 @@ function App() {
   })
   const [settingsSaved, setSettingsSaved] = useState(false)
 
+  const [usageStats, setUsageStats] = useState(null)
+  const [usageError, setUsageError] = useState(null)
+
   const [renamingId, setRenamingId] = useState(null)
   const [renameText, setRenameText] = useState('')
 
   const messagesEndRef = useRef(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('xiaoke-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -60,6 +111,9 @@ function App() {
       loadSessions()
       loadSettings()
     }
+    if (screen === 'console') {
+      loadUsageStats()
+    }
   }, [screen])
 
   useEffect(() => {
@@ -70,7 +124,7 @@ function App() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, animatingIdx])
 
   const loadSessions = async () => {
     try {
@@ -147,6 +201,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`)
       const data = await res.json()
       if (Array.isArray(data)) {
+        setAnimatingIdx(-1)
         setMessages(data.map(m => ({
           role: m.role,
           content: m.content,
@@ -191,6 +246,21 @@ function App() {
     }
   }
 
+  const loadUsageStats = async () => {
+    setUsageError(null)
+    try {
+      const res = await fetch(`${API_URL}/api/usage/stats`)
+      const data = await res.json()
+      if (data.error) {
+        setUsageError(data.detail || data.error)
+      } else {
+        setUsageStats(data)
+      }
+    } catch (err) {
+      setUsageError(err.message)
+    }
+  }
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
@@ -222,19 +292,22 @@ function App() {
         loadSessions()
       }
 
+      const pushReply = (content) => {
+        setMessages(prev => {
+          setAnimatingIdx(prev.length)
+          return [...prev, {
+            role: 'assistant',
+            content,
+            time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+          }]
+        })
+      }
+
       if (data.reply) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: data.reply,
-          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-        }])
+        pushReply(data.reply)
         loadSessions()
       } else {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: '抱歉，我暂时无法回复。请稍后再试。',
-          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-        }])
+        pushReply('抱歉，我暂时无法回复。请稍后再试。')
       }
     } catch (err) {
       console.error('发送失败:', err)
@@ -275,6 +348,71 @@ function App() {
     )
   }
 
+  // ========== Console ==========
+  if (screen === 'console') {
+    const fmt = (n) => n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+    const money = (n) => `$${Number(n).toFixed(4)}`
+    const maxCost = usageStats?.sessions?.[0]?.cost_usd || 0
+    return (
+      <div className="settings-page">
+        <div className="settings-header">
+          <button className="back-btn" onClick={() => setScreen('chat')}>←</button>
+          <h2>Console · 用量统计</h2>
+        </div>
+        <div className="settings-body">
+          {usageError && (
+            <div className="settings-card">
+              <p className="console-empty">加载失败：{usageError}</p>
+            </div>
+          )}
+          {usageStats && (
+            <>
+              <div className="console-cards">
+                <div className="console-card">
+                  <div className="console-card-label">今日花费</div>
+                  <div className="console-card-value">{money(usageStats.today.cost_usd)}</div>
+                  <div className="console-card-sub">
+                    ↑ {fmt(usageStats.today.input_tokens)} tokens · ↓ {fmt(usageStats.today.output_tokens)} tokens<br />
+                    {usageStats.today.rounds} 回合
+                  </div>
+                </div>
+                <div className="console-card">
+                  <div className="console-card-label">累计花费</div>
+                  <div className="console-card-value">{money(usageStats.total.cost_usd)}</div>
+                  <div className="console-card-sub">
+                    ↑ {fmt(usageStats.total.input_tokens)} tokens · ↓ {fmt(usageStats.total.output_tokens)} tokens<br />
+                    {usageStats.total.rounds} 回合
+                  </div>
+                </div>
+              </div>
+              <div className="settings-card">
+                <div className="settings-card-title">按会话排行</div>
+                {usageStats.sessions.length === 0 && (
+                  <p className="console-empty">还没有用量记录，去聊两句再来看~</p>
+                )}
+                {usageStats.sessions.map(s => (
+                  <div className="usage-bar-row" key={s.session_id}>
+                    <div className="usage-bar-head">
+                      <span>{s.name}</span>
+                      <span className="cost">{money(s.cost_usd)} · {s.rounds} 回合</span>
+                    </div>
+                    <div className="usage-bar-track">
+                      <div
+                        className="usage-bar-fill"
+                        style={{ width: maxCost > 0 ? `${(s.cost_usd / maxCost) * 100}%` : '0%' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {!usageStats && !usageError && <p className="console-empty">加载中...</p>}
+        </div>
+      </div>
+    )
+  }
+
   // ========== Settings ==========
   if (screen === 'settings') {
     return (
@@ -284,6 +422,21 @@ function App() {
           <h2>设置</h2>
         </div>
         <div className="settings-body">
+          <div className="settings-card">
+            <div className="settings-card-title">主题</div>
+            <div className="theme-options">
+              {THEMES.map(t => (
+                <button
+                  key={t.id}
+                  className={`theme-option ${theme === t.id ? 'active' : ''}`}
+                  onClick={() => setTheme(t.id)}
+                >
+                  <div className={`theme-swatch ${t.id}`} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="settings-card">
             <div className="settings-card-title">提示词</div>
             <div className="setting-group">
@@ -399,13 +552,18 @@ function App() {
             </div>
           ))}
         </div>
-        <div className="model-select">
-          <label>Model</label>
-          <select value={model} onChange={e => setModel(e.target.value)}>
-            <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
-            <option value="anthropic/claude-opus-4-6">Claude Opus 4.6</option>
-            <option value="deepseek/deepseek-chat">DeepSeek</option>
-          </select>
+        <div className="sidebar-footer">
+          <button className="console-link" onClick={() => { setScreen('console'); setSidebarOpen(false) }}>
+            📊 Console 用量
+          </button>
+          <div className="model-select">
+            <label>Model</label>
+            <select value={model} onChange={e => setModel(e.target.value)}>
+              <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              <option value="anthropic/claude-opus-4-6">Claude Opus 4.6</option>
+              <option value="deepseek/deepseek-chat">DeepSeek</option>
+            </select>
+          </div>
         </div>
         <img src="/decor-cloud.jpg" alt="" className="sidebar-cloud" />
       </div>
@@ -416,6 +574,7 @@ function App() {
             <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
             <img src="/clawd-bubble.gif" alt="clawd" />
             {activeSession ? activeSession.name : 'Hearthstone'}
+            {loading && <span className="typing-hint">小克正在输入…</span>}
           </div>
           <button className="settings-btn" onClick={() => setScreen('settings')}>⚙</button>
         </div>
@@ -426,7 +585,7 @@ function App() {
             <div className="empty-state">
               <img src="/decor-crystal.jpg" alt="" className="empty-crystal" />
               <img src="/clawd-idle.gif" alt="clawd" className="empty-clawd" />
-              <p>说点什么吧，小月~</p>
+              <p>今天想聊什么，小月？</p>
             </div>
           )}
           {messages.map((msg, i) => (
@@ -436,7 +595,11 @@ function App() {
                   <img src="/clawd-bubble.gif" alt="小克" />
                 </div>
               )}
-              <div className="bubble">{msg.content}</div>
+              <MessageBubble
+                msg={msg}
+                animate={i === animatingIdx}
+                onAnimDone={() => setAnimatingIdx(-1)}
+              />
               <div className="msg-time">{msg.time}</div>
             </div>
           ))}
