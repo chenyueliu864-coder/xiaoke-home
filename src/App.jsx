@@ -565,7 +565,7 @@ function App() {
             </select>
           </div>
         </div>
-        <img src="/decor-cloud.jpg" alt="" className="sidebar-cloud" />
+        <img src="/decor-cloud.png" alt="" className="sidebar-cloud" />
       </div>
 
       <div className="chat-main">
@@ -580,10 +580,10 @@ function App() {
         </div>
 
         <div className="messages">
-          <img src="/decor-moon.jpg" alt="" className="messages-moon" />
+          <img src="/decor-moon.png" alt="" className="messages-moon" />
           {messages.length === 0 && !loading && (
             <div className="empty-state">
-              <img src="/decor-crystal.jpg" alt="" className="empty-crystal" />
+              <img src="/decor-crystal.png" alt="" className="empty-crystal" />
               <img src="/clawd-idle.gif" alt="clawd" className="empty-clawd" />
               <p>今天想聊什么，小月？</p>
             </div>
@@ -610,7 +610,7 @@ function App() {
               </div>
               <div className="bubble thinking">
                 <div className="thinking-wrapper">
-                  <img src="/decor-star.jpg" alt="" className="thinking-star" />
+                  <img src="/decor-star.png" alt="" className="thinking-star" />
                   <span>小克正在思考...</span>
                 </div>
               </div>
