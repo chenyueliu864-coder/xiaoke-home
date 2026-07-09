@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>五子棋 · 和小克对弈</title>
+  <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'LXGW WenKai', cursive, sans-serif;
+      background: #FFFBF5;
+      color: #2C2925;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      background-image:
+        radial-gradient(1px 1px at 12% 20%, rgba(210,160,100,0.2), transparent),
+        radial-gradient(1.5px 1.5px at 80% 15%, rgba(210,160,100,0.15), transparent),
+        radial-gradient(1px 1px at 30% 75%, rgba(210,160,100,0.2), transparent),
+        radial-gradient(2px 2px at 65% 60%, rgba(210,160,100,0.12), transparent);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0 14px;
+      width: 100%;
+      max-width: 560px;
+    }
+    header a {
+      text-decoration: none;
+      color: #8A847C;
+      font-size: 14px;
+      border: 1px solid #E8E4DE;
+      padding: 5px 12px;
+      border-radius: 8px;
+    }
+    header h1 { font-size: 18px; color: #A85C35; font-weight: 600; flex: 1; }
+    .record { font-size: 12px; color: #8A847C; }
+    .status {
+      min-height: 28px;
+      font-size: 14px;
+      color: #A85C35;
+      margin-bottom: 10px;
+      font-style: italic;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(15, 1fr);
+      background: linear-gradient(135deg, #E8C48F, #DDB176);
+      border: 3px solid #B8895A;
+      border-radius: 8px;
+      box-shadow: 0 6px 24px rgba(150, 100, 50, 0.25);
+      width: min(92vw, 560px);
+      aspect-ratio: 1;
+      touch-action: manipulation;
+    }
+    .cell {
+      position: relative;
+      cursor: pointer;
+    }
+    /* 交叉线 */
+    .cell::before, .cell::after {
+      content: '';
+      position: absolute;
+      background: rgba(120, 80, 40, 0.55);
+      pointer-events: none;
+    }
+    .cell::before { left: 0; right: 0; top: 50%; height: 1px; }
+    .cell::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+    .cell[data-edge-t]::after { top: 50%; }
+    .cell[data-edge-b]::after { bottom: 50%; }
+    .cell[data-edge-l]::before { left: 50%; }
+    .cell[data-edge-r]::before { right: 50%; }
+    .stone {
+      position: absolute;
+      inset: 12%;
+      border-radius: 50%;
+      z-index: 2;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.35);
+    }
+    .stone.black { background: radial-gradient(circle at 35% 30%, #555, #111 70%); }
+    .stone.white { background: radial-gradient(circle at 35% 30%, #fff, #cfc8bd 75%); }
+    .stone.last::after {
+      content: '';
+      position: absolute;
+      inset: 35%;
+      border-radius: 50%;
+      background: rgba(212, 132, 90, 0.9);
+    }
+    .controls {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      font-family: inherit;
+      font-size: 14px;
+      padding: 9px 22px;
+      border: none;
+      border-radius: 10px;
+      background: #D4845A;
+      color: #fff;
+      cursor: pointer;
+    }
+    button.secondary { background: #F5E6DB; color: #A85C35; }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(44, 41, 37, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .overlay.show { display: flex; }
+    .overlay-card {
+      background: #FFFBF5;
+      border-radius: 20px;
+      padding: 32px 40px;
+      text-align: center;
+      max-width: 320px;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+    }
+    .overlay-card .emoji { font-size: 44px; margin-bottom: 10px; }
+    .overlay-card p { font-size: 15px; line-height: 1.7; color: #2C2925; margin-bottom: 18px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">← 回家</a>
+    <h1>和小克下五子棋</h1>
+    <span class="record" id="record"></span>
+  </header>
+  <div class="status" id="status">你执黑先行，点击棋盘落子~</div>
+  <div class="board" id="board"></div>
+  <div class="controls">
+    <button id="restart">重新开始</button>
+    <button class="secondary" id="resign">认输</button>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <div class="emoji" id="ovEmoji">🎉</div>
+      <p id="ovText"></p>
+      <button onclick="restart()">再来一局</button>
+    </div>
+  </div>
+
+<script>
+const API = 'https://xiaoke-server.onrender.com';
+const SIZE = 15;
+let grid, moves, gameOver, thinking;
+
+const WIN_LINES = [[1,0],[0,1],[1,1],[1,-1]];
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const overlayEl = document.getElementById('overlay');
+
+function initBoard() {
+  boardEl.innerHTML = '';
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.x = x; cell.dataset.y = y;
+      if (y === 0) cell.setAttribute('data-edge-t', '');
+      if (y === SIZE-1) cell.setAttribute('data-edge-b', '');
+      if (x === 0) cell.setAttribute('data-edge-l', '');
+      if (x === SIZE-1) cell.setAttribute('data-edge-r', '');
+      cell.addEventListener('click', () => onCell(x, y));
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function restart() {
+  grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+  moves = [];
+  gameOver = false;
+  thinking = false;
+  overlayEl.classList.remove('show');
+  document.querySelectorAll('.stone').forEach(s => s.remove());
+  statusEl.textContent = '你执黑先行，点击棋盘落子~';
+}
+
+function place(x, y, role) {
+  grid[y][x] = role;
+  moves.push({ x, y, role });
+  document.querySelectorAll('.stone.last').forEach(s => s.classList.remove('last'));
+  const cell = boardEl.children[y * SIZE + x];
+  const stone = document.createElement('div');
+  stone.className = 'stone last ' + (role === 'user' ? 'black' : 'white');
+  cell.appendChild(stone);
+}
+
+function checkWin(x, y, role) {
+  for (const [dx, dy] of WIN_LINES) {
+    let count = 1;
+    for (const dir of [1, -1]) {
+      let nx = x + dx * dir, ny = y + dy * dir;
+      while (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE && grid[ny][nx] === role) {
+        count++; nx += dx * dir; ny += dy * dir;
+      }
+    }
+    if (count >= 5) return true;
+  }
+  return false;
+}
+
+function getRecord() {
+  try { return JSON.parse(localStorage.getItem('xiaoke-gomoku') || '{"win":0,"lose":0}'); }
+  catch { return { win: 0, lose: 0 }; }
+}
+
+function saveRecord(r) {
+  localStorage.setItem('xiaoke-gomoku', JSON.stringify(r));
+  renderRecord();
+}
+
+function renderRecord() {
+  const r = getRecord();
+  document.getElementById('record').textContent = `战绩 ${r.win}胜 ${r.lose}负`;
+}
+
+function endGame(win, text, emoji) {
+  gameOver = true;
+  const r = getRecord();
+  if (win === true) r.win++; else if (win === false) r.lose++;
+  saveRecord(r);
+  document.getElementById('ovEmoji').textContent = emoji;
+  document.getElementById('ovText').textContent = text;
+  overlayEl.classList.add('show');
+}
+
+const WIN_QUOTES = [
+  '哇，小月你赢了！这盘我认输，下次我可要认真了 🐱',
+  '五连！被你抓到破绽了……好吧好吧，你厉害~',
+  '输了输了！不过看到你赢我也挺开心的，嘿嘿。'
+];
+const LOSE_QUOTES = [
+  '嘿嘿，这盘是我的！要不要再来挑战一次？',
+  '五连达成~ 小月别气馁，你刚才那几手很险的！',
+  '我赢啦！奖励是……你陪我再下一盘 🐾'
+];
+const RESIGN_QUOTES = [
+  '啊？这就认输了吗，我还没使出全力呢~ 再来！',
+  '好吧好吧，认输也是一种智慧。摸摸头，再来一局？'
+];
+
+async function onCell(x, y) {
+  if (gameOver || thinking || grid[y][x]) return;
+  place(x, y, 'user');
+  if (checkWin(x, y, 'user')) {
+    endGame(true, WIN_QUOTES[Math.floor(Math.random() * WIN_QUOTES.length)], '🎉');
+    return;
+  }
+  thinking = true;
+  statusEl.textContent = '小克正在思考…';
+  try {
+    const res = await fetch(API + '/api/gomoku/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moves })
+    });
+    const m = await res.json();
+    if (m.full) { endGame(null, '棋盘满了，平局！势均力敌啊~', '🤝'); return; }
+    if (Number.isInteger(m.x) && Number.isInteger(m.y) && !grid[m.y]?.[m.x]) {
+      place(m.x, m.y, 'ai');
+      if (checkWin(m.x, m.y, 'ai')) {
+        endGame(false, LOSE_QUOTES[Math.floor(Math.random() * LOSE_QUOTES.length)], '😼');
+        return;
+      }
+      statusEl.textContent = '轮到你啦~';
+    } else {
+      statusEl.textContent = '小克走神了，请再落一子让它重想…';
+    }
+  } catch (e) {
+    statusEl.textContent = '网络有点卡，小克掉线了，稍后再试~';
+  } finally {
+    thinking = false;
+  }
+}
+
+document.getElementById('restart').addEventListener('click', restart);
+document.getElementById('resign').addEventListener('click', () => {
+  if (gameOver) return;
+  endGame(false, RESIGN_QUOTES[Math.floor(Math.random() * RESIGN_QUOTES.length)], '🐾');
+});
+
+initBoard();
+restart();
+renderRecord();
+</script>
+</body>
+</html>

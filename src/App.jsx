@@ -96,8 +96,13 @@ function App() {
     compress_threshold: 6000,
     compress_keep_rounds: 6,
     max_reply_tokens: 2048,
+    countdowns: [],
   })
   const [settingsSaved, setSettingsSaved] = useState(false)
+  const [cdTitle, setCdTitle] = useState('')
+  const [cdDate, setCdDate] = useState('')
+  const [pokeText, setPokeText] = useState('')
+  const [poking, setPoking] = useState(false)
 
   const [usageStats, setUsageStats] = useState(null)
   const [usageError, setUsageError] = useState(null)
@@ -248,6 +253,7 @@ function App() {
           compress_threshold: data.compress_threshold ?? 6000,
           compress_keep_rounds: data.compress_keep_rounds ?? 6,
           max_reply_tokens: data.max_reply_tokens ?? 2048,
+          countdowns: Array.isArray(data.countdowns) ? data.countdowns : [],
         })
       }
     } catch (err) {
@@ -325,6 +331,37 @@ function App() {
   }
 
   const stickerMap = Object.fromEntries(stickers.map(s => [String(s.id), s.filename]))
+
+  const poke = async () => {
+    if (poking) return
+    setPoking(true)
+    setPokeText('…')
+    try {
+      const res = await fetch(`${API_URL}/api/poke`)
+      const data = await res.json()
+      setPokeText(data.text || '嗯？')
+    } catch {
+      setPokeText('（小克没听见，再戳一下？）')
+    } finally {
+      setPoking(false)
+      setTimeout(() => setPokeText(''), 8000)
+    }
+  }
+
+  const daysLeft = (dateStr) => {
+    const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000)
+    return diff
+  }
+
+  const addCountdown = () => {
+    if (!cdTitle.trim() || !cdDate) return
+    setSettings(s => ({ ...s, countdowns: [...(s.countdowns || []), { title: cdTitle.trim(), target_date: cdDate }] }))
+    setCdTitle(''); setCdDate('')
+  }
+
+  const removeCountdown = (i) => {
+    setSettings(s => ({ ...s, countdowns: s.countdowns.filter((_, idx) => idx !== i) }))
+  }
 
   const loadUsageStats = async () => {
     setUsageError(null)
@@ -593,6 +630,22 @@ function App() {
             </div>
           </div>
           <div className="settings-card">
+            <div className="settings-card-title">倒计时</div>
+            {(settings.countdowns || []).map((c, i) => (
+              <div className="countdown-row" key={i}>
+                <span>{c.title}</span>
+                <span className="countdown-row-date">{c.target_date}（{daysLeft(c.target_date)} 天）</span>
+                <button onClick={() => removeCountdown(i)}>×</button>
+              </div>
+            ))}
+            <div className="sticker-add">
+              <input placeholder="标题（如：考研）" value={cdTitle} onChange={e => setCdTitle(e.target.value)} />
+              <input type="date" value={cdDate} onChange={e => setCdDate(e.target.value)} />
+              <button disabled={!cdTitle.trim() || !cdDate} onClick={addCountdown}>添加</button>
+            </div>
+            <p className="settings-hint">添加/删除后记得点底部「保存」。</p>
+          </div>
+          <div className="settings-card">
             <div className="settings-card-title">表情包</div>
             {stickers.length === 0 && (
               <button className="save-btn" onClick={importClawdStickers} disabled={stickerBusy}>
@@ -645,6 +698,19 @@ function App() {
           <span>Hearthstone</span>
         </div>
         <button className="new-chat-btn" onClick={createSession}>+ 新对话</button>
+        {(settings.countdowns || []).length > 0 && (
+          <div className="countdown-list">
+            {settings.countdowns.map((c, i) => {
+              const d = daysLeft(c.target_date)
+              return (
+                <div className="countdown-chip" key={i}>
+                  <span className="countdown-title">{c.title}</span>
+                  <span className="countdown-days">{d > 0 ? `${d} 天` : d === 0 ? '今天!' : '已过'}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
         <h3 className="sidebar-label">Recent</h3>
         <div className="session-list">
           {sessions.map(s => (
@@ -685,6 +751,9 @@ function App() {
           <button className="console-link" onClick={() => { setScreen('console'); setSidebarOpen(false) }}>
             📊 Console 用量
           </button>
+          <button className="console-link" onClick={() => { window.location.href = '/gomoku.html' }}>
+            ⚫ 五子棋
+          </button>
           <div className="model-select">
             <label>Model</label>
             <select value={model} onChange={e => setModel(e.target.value)}>
@@ -705,7 +774,10 @@ function App() {
             {activeSession ? activeSession.name : 'Hearthstone'}
             {loading && <span className="typing-hint">小克正在输入…</span>}
           </div>
-          <button className="settings-btn" onClick={() => setScreen('settings')}>⚙</button>
+          <div>
+            <button className="settings-btn" onClick={poke} title="戳一戳小克">🐾</button>
+            <button className="settings-btn" onClick={() => setScreen('settings')}>⚙</button>
+          </div>
         </div>
 
         <div className="messages">
@@ -713,9 +785,17 @@ function App() {
           {messages.length === 0 && !loading && (
             <div className="empty-state">
               <img src="/decor-crystal.png" alt="" className="empty-crystal" />
-              <img src="/clawd-idle.gif" alt="clawd" className="empty-clawd" />
-              <p>今天想聊什么，小月？</p>
+              <img
+                src="/clawd-idle.gif" alt="clawd"
+                className="empty-clawd pokeable"
+                onClick={poke}
+                title="戳一戳小克"
+              />
+              <p>{pokeText || '今天想聊什么，小月？（戳一戳小克试试）'}</p>
             </div>
+          )}
+          {pokeText && messages.length > 0 && (
+            <div className="poke-toast">{pokeText}</div>
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`msg ${msg.role}`}>
