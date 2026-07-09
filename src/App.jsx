@@ -760,6 +760,7 @@ function App() {
               <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
               <option value="anthropic/claude-opus-4-6">Claude Opus 4.6</option>
               <option value="deepseek/deepseek-chat">DeepSeek</option>
+            <option value="deepseek/deepseek-r1">DeepSeek R1（可看思考链）</option>
             </select>
           </div>
         </div>
