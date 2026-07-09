@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import Memories from './Memories.jsx'
+import Library from './Library.jsx'
 import './App.css'
 
 const API_URL = 'https://xiaoke-server.onrender.com'
@@ -41,7 +43,20 @@ function Typewriter({ text, onDone }) {
   return <>{text.slice(0, shown)}</>
 }
 
-function MessageBubble({ msg, animate, onAnimDone }) {
+// 把 [sticker:N] 渲染成表情图片
+function renderWithStickers(text, stickerMap) {
+  if (!text.includes('[sticker:')) return text
+  const parts = text.split(/(\[sticker:\d+\])/)
+  return parts.map((p, i) => {
+    const m = p.match(/^\[sticker:(\d+)\]$/)
+    if (m && stickerMap[m[1]]) {
+      return <img key={i} className="sticker-inline" src={stickerMap[m[1]]} alt="表情" />
+    }
+    return m ? '' : p
+  })
+}
+
+function MessageBubble({ msg, animate, onAnimDone, stickerMap }) {
   const { think, body } = splitThink(msg.content)
   return (
     <div className="bubble">
@@ -51,7 +66,9 @@ function MessageBubble({ msg, animate, onAnimDone }) {
           <div className="think-fold-body">{think}</div>
         </details>
       )}
-      {animate ? <Typewriter text={body} onDone={onAnimDone} /> : body}
+      {animate
+        ? <Typewriter text={body} onDone={onAnimDone} />
+        : renderWithStickers(body, stickerMap || {})}
     </div>
   )
 }
@@ -85,6 +102,11 @@ function App() {
   const [usageStats, setUsageStats] = useState(null)
   const [usageError, setUsageError] = useState(null)
 
+  const [stickers, setStickers] = useState([])
+  const [stickerFile, setStickerFile] = useState('')
+  const [stickerLabel, setStickerLabel] = useState('')
+  const [stickerBusy, setStickerBusy] = useState(false)
+
   const [renamingId, setRenamingId] = useState(null)
   const [renameText, setRenameText] = useState('')
 
@@ -110,6 +132,7 @@ function App() {
     if (screen === 'chat') {
       loadSessions()
       loadSettings()
+      loadStickers()
     }
     if (screen === 'console') {
       loadUsageStats()
@@ -246,6 +269,63 @@ function App() {
     }
   }
 
+  const loadStickers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/stickers`)
+      const data = await res.json()
+      if (Array.isArray(data)) setStickers(data)
+    } catch (err) {
+      console.error('加载表情包失败:', err)
+    }
+  }
+
+  const addSticker = async (filename, label) => {
+    setStickerBusy(true)
+    try {
+      const res = await fetch(`${API_URL}/api/stickers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, label: label || undefined })
+      })
+      const data = await res.json()
+      if (data.id) {
+        setStickers(prev => [...prev, data])
+        setStickerFile('')
+        setStickerLabel('')
+      }
+    } catch (err) {
+      console.error('添加表情失败:', err)
+    } finally {
+      setStickerBusy(false)
+    }
+  }
+
+  const deleteSticker = async (id) => {
+    await fetch(`${API_URL}/api/stickers/${id}`, { method: 'DELETE' })
+    setStickers(prev => prev.filter(s => s.id !== id))
+  }
+
+  const importClawdStickers = async () => {
+    setStickerBusy(true)
+    const builtins = [
+      ['/clawd-happy.gif', '开心撒花'],
+      ['/clawd-bubble.gif', '冒泡打招呼'],
+      ['/clawd-juggling.gif', '手忙脚乱'],
+      ['/clawd-error.gif', '出错崩溃'],
+      ['/clawd-idle-reading.gif', '安静看书'],
+      ['/clawd-headphones-groove.gif', '戴耳机摇摆'],
+      ['/clawd-conducting.gif', '指挥家模式'],
+      ['/clawd-carrying.gif', '努力搬砖'],
+    ]
+    const existing = new Set(stickers.map(s => s.filename))
+    for (const [f, l] of builtins) {
+      if (!existing.has(f)) await addSticker(f, l)
+    }
+    setStickerBusy(false)
+  }
+
+  const stickerMap = Object.fromEntries(stickers.map(s => [String(s.id), s.filename]))
+
   const loadUsageStats = async () => {
     setUsageError(null)
     try {
@@ -346,6 +426,16 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  // ========== 回忆 ==========
+  if (screen === 'memories') {
+    return <Memories apiUrl={API_URL} onBack={() => setScreen('chat')} />
+  }
+
+  // ========== 书斋 ==========
+  if (screen === 'library') {
+    return <Library apiUrl={API_URL} onBack={() => setScreen('chat')} />
   }
 
   // ========== Console ==========
@@ -502,6 +592,39 @@ function App() {
               <div className="setting-group" />
             </div>
           </div>
+          <div className="settings-card">
+            <div className="settings-card-title">表情包</div>
+            {stickers.length === 0 && (
+              <button className="save-btn" onClick={importClawdStickers} disabled={stickerBusy}>
+                {stickerBusy ? '导入中…' : '一键导入内置 Clawd 表情'}
+              </button>
+            )}
+            <div className="sticker-grid">
+              {stickers.map(s => (
+                <div className="sticker-item" key={s.id}>
+                  <img src={s.filename} alt={s.label} />
+                  <span>{s.label}</span>
+                  <button onClick={() => deleteSticker(s.id)}>×</button>
+                </div>
+              ))}
+            </div>
+            <div className="sticker-add">
+              <input
+                placeholder="图片地址（/xx.gif 或 https://…）"
+                value={stickerFile}
+                onChange={e => setStickerFile(e.target.value)}
+              />
+              <input
+                placeholder="标签（留空自动生成）"
+                value={stickerLabel}
+                onChange={e => setStickerLabel(e.target.value)}
+              />
+              <button
+                disabled={stickerBusy || !stickerFile.trim()}
+                onClick={() => addSticker(stickerFile.trim(), stickerLabel.trim())}
+              >{stickerBusy ? '…' : '添加'}</button>
+            </div>
+          </div>
           <button className="save-btn" onClick={saveSettings}>
             {settingsSaved ? '✓ 已保存' : '保存'}
           </button>
@@ -553,6 +676,12 @@ function App() {
           ))}
         </div>
         <div className="sidebar-footer">
+          <button className="console-link" onClick={() => { setScreen('memories'); setSidebarOpen(false) }}>
+            🌙 回忆
+          </button>
+          <button className="console-link" onClick={() => { setScreen('library'); setSidebarOpen(false) }}>
+            📚 书斋
+          </button>
           <button className="console-link" onClick={() => { setScreen('console'); setSidebarOpen(false) }}>
             📊 Console 用量
           </button>
@@ -599,6 +728,7 @@ function App() {
                 msg={msg}
                 animate={i === animatingIdx}
                 onAnimDone={() => setAnimatingIdx(-1)}
+                stickerMap={stickerMap}
               />
               <div className="msg-time">{msg.time}</div>
             </div>
