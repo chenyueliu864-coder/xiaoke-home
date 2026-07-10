@@ -1616,3 +1616,84 @@ body {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ========== 批注对话 ========== */
+.annotate-dialog {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(440px, 90vw);
+}
+
+.annotate-note {
+  background: #211C15;
+  border: 1px solid #3A3227;
+  color: #D8CBB8;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+
+.annotate-note:focus { border-color: #C9A86A; }
+
+.annotate-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.annotate-actions button.slow {
+  background: none;
+  border: 1px solid #C9A86A;
+  color: #C9A86A;
+}
+
+.annotate-actions button.cancel {
+  background: none;
+  border: 1px solid #3A3227;
+  color: #7A6E5C;
+}
+
+.ann-mark {
+  background: rgba(201, 168, 106, 0.22);
+  color: inherit;
+  border-bottom: 1px dashed #C9A86A;
+  cursor: pointer;
+  padding: 0 1px;
+}
+
+.ann-thread {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #2A2419;
+}
+
+.ann-bubble {
+  margin: 8px 0 0 10px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.ann-bubble.mine {
+  background: rgba(212, 132, 90, 0.16);
+  border: 1px solid rgba(212, 132, 90, 0.4);
+  color: #E8C4AC;
+}
+
+.ann-bubble.ai {
+  background: rgba(110, 155, 197, 0.14);
+  border: 1px solid rgba(110, 155, 197, 0.4);
+  color: #B8CFE5;
+}
+
+.ann-pending {
+  margin: 8px 0 0 10px;
+  font-size: 12px;
+  color: #7A6E5C;
+  font-style: italic;
+}
+

@@ -19,6 +19,8 @@ export default function Library({ apiUrl, onBack }) {
   const [annotations, setAnnotations] = useState([])
   const [showAnnotations, setShowAnnotations] = useState(false)
   const [selText, setSelText] = useState('')
+  const [noteText, setNoteText] = useState('')
+  const [annBusy, setAnnBusy] = useState(false)
 
   // in-book chat
   const [showChat, setShowChat] = useState(false)
@@ -141,23 +143,62 @@ export default function Library({ apiUrl, onBack }) {
     setSelText(t.slice(0, 500))
   }
 
-  const saveAnnotation = async () => {
-    if (!selText) return
+  // fast=true: 立即让小克回（API）；fast=false: 存着等订阅端慢慢回
+  const saveAnnotation = async (fast) => {
+    if (!selText || annBusy) return
+    setAnnBusy(true)
     try {
       const res = await fetch(`${apiUrl}/api/books/${book.id}/annotations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chapter_idx: chapterIdx, quote: selText })
+        body: JSON.stringify({ chapter_idx: chapterIdx, quote: selText, note: noteText.trim() || null })
       })
       const data = await res.json()
       if (data.id) {
         setAnnotations(prev => [data, ...prev])
         setSelText('')
+        setNoteText('')
         window.getSelection()?.removeAllRanges()
+        if (fast) {
+          setShowAnnotations(true)
+          const replyRes = await fetch(`${apiUrl}/api/annotations/${data.id}/reply`, { method: 'POST' })
+          const replied = await replyRes.json()
+          if (replied.id) {
+            setAnnotations(prev => prev.map(a => a.id === replied.id ? replied : a))
+          }
+        }
       }
     } catch (err) {
       console.error('标注失败:', err)
+    } finally {
+      setAnnBusy(false)
     }
+  }
+
+  // 正文渲染：把本章已划线的句子高亮，点击打开批注面板
+  const renderHighlighted = (text) => {
+    const quotes = annotations
+      .filter(a => a.chapter_idx === chapterIdx && a.quote)
+      .map(a => a.quote)
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 50)
+    if (quotes.length === 0) return text
+    let segments = [text]
+    for (const q of quotes) {
+      const next = []
+      for (const seg of segments) {
+        if (typeof seg !== 'string' || !seg.includes(q)) { next.push(seg); continue }
+        const parts = seg.split(q)
+        parts.forEach((p, i) => {
+          if (p) next.push(p)
+          if (i < parts.length - 1) next.push(
+            <mark key={`${q.slice(0, 12)}-${i}-${next.length}`} className="ann-mark" onClick={() => setShowAnnotations(true)}>{q}</mark>
+          )
+        })
+      }
+      segments = next
+    }
+    return segments
   }
 
   const sendChat = async () => {
@@ -274,19 +315,25 @@ export default function Library({ apiUrl, onBack }) {
 
       {showAnnotations && (
         <div className="reader-annotations">
-          {annotations.length === 0 && <p className="library-muted">选中正文文字即可标注金句</p>}
+          {annotations.length === 0 && <p className="library-muted">选中正文文字即可划线写想法</p>}
           {annotations.map(a => (
-            <blockquote key={a.id} onClick={() => goChapter(a.chapter_idx)}>
-              {a.quote}
-              <span>· 第 {a.chapter_idx + 1} 章</span>
-            </blockquote>
+            <div className="ann-thread" key={a.id}>
+              <blockquote onClick={() => goChapter(a.chapter_idx)}>
+                {a.quote}
+                <span>· 第 {a.chapter_idx + 1} 章</span>
+              </blockquote>
+              {a.note && <div className="ann-bubble mine">{a.note}</div>}
+              {a.ai_reply
+                ? <div className="ann-bubble ai">{a.ai_reply}</div>
+                : <div className="ann-pending">🌙 小克还没读到这里</div>}
+            </div>
           ))}
         </div>
       )}
 
       <div className="reader-content" ref={contentRef} onMouseUp={onSelect} onTouchEnd={onSelect}>
         <h3>{chapters[chapterIdx]?.title}</h3>
-        {chapterContent === null ? <p className="library-muted">加载中…</p> : <div className="reader-text">{chapterContent}</div>}
+        {chapterContent === null ? <p className="library-muted">加载中…</p> : <div className="reader-text">{renderHighlighted(chapterContent)}</div>}
         <div className="reader-nav">
           <button disabled={chapterIdx <= 0} onClick={() => goChapter(chapterIdx - 1)}>上一章</button>
           <span>{chapterIdx + 1} / {chapters.length}</span>
@@ -295,10 +342,24 @@ export default function Library({ apiUrl, onBack }) {
       </div>
 
       {selText && (
-        <div className="annotate-bar">
+        <div className="annotate-bar annotate-dialog">
           <span>「{selText.slice(0, 40)}{selText.length > 40 ? '…' : ''}」</span>
-          <button onClick={saveAnnotation}>标注金句</button>
-          <button onClick={() => { setSelText(''); window.getSelection()?.removeAllRanges() }}>取消</button>
+          <textarea
+            className="annotate-note"
+            placeholder="写下你的想法（可空）…"
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            rows={2}
+          />
+          <div className="annotate-actions">
+            <button onClick={() => saveAnnotation(true)} disabled={annBusy}>
+              {annBusy ? '小克回应中…' : '让小克回 ⚡'}
+            </button>
+            <button className="slow" onClick={() => saveAnnotation(false)} disabled={annBusy}>
+              留给小克 🌙
+            </button>
+            <button className="cancel" onClick={() => { setSelText(''); setNoteText(''); window.getSelection()?.removeAllRanges() }}>取消</button>
+          </div>
         </div>
       )}
 
