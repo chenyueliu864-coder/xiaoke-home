@@ -2,7 +2,7 @@
 // ⚠️ 重要：每次前端改动发布前，必须把下面的 CACHE_NAME 版本号 +1
 //    （v2 → v3 → v4 …），否则手机 PWA 旧缓存不更新，看不到新 UI！
 // ============================================================
-const CACHE_NAME = 'xiaoke-v8';
+const CACHE_NAME = 'xiaoke-v9';
 
 self.addEventListener('install', () => self.skipWaiting());
 

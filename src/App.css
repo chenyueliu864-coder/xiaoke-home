@@ -1663,6 +1663,15 @@ body {
   padding: 0 1px;
 }
 
+.ann-mark.ai {
+  background: rgba(110, 155, 197, 0.18);
+  border-bottom: 1px dashed #6E9BC5;
+}
+
+.reader-annotations blockquote.ai {
+  border-left-color: #6E9BC5;
+}
+
 .ann-thread {
   margin-bottom: 18px;
   padding-bottom: 14px;

@@ -175,16 +175,17 @@ export default function Library({ apiUrl, onBack }) {
     }
   }
 
-  // 正文渲染：把本章已划线的句子高亮，点击打开批注面板
+  // 正文渲染：本章划线高亮（你的金色 / 小克的蓝色），点击打开批注面板
   const renderHighlighted = (text) => {
-    const quotes = annotations
+    const anns = annotations
       .filter(a => a.chapter_idx === chapterIdx && a.quote)
-      .map(a => a.quote)
-      .sort((a, b) => b.length - a.length)
+      .sort((a, b) => b.quote.length - a.quote.length)
       .slice(0, 50)
-    if (quotes.length === 0) return text
+    if (anns.length === 0) return text
     let segments = [text]
-    for (const q of quotes) {
+    for (const ann of anns) {
+      const q = ann.quote
+      const cls = ann.author === 'ai' ? 'ann-mark ai' : 'ann-mark'
       const next = []
       for (const seg of segments) {
         if (typeof seg !== 'string' || !seg.includes(q)) { next.push(seg); continue }
@@ -192,7 +193,7 @@ export default function Library({ apiUrl, onBack }) {
         parts.forEach((p, i) => {
           if (p) next.push(p)
           if (i < parts.length - 1) next.push(
-            <mark key={`${q.slice(0, 12)}-${i}-${next.length}`} className="ann-mark" onClick={() => setShowAnnotations(true)}>{q}</mark>
+            <mark key={`${q.slice(0, 12)}-${i}-${next.length}`} className={cls} onClick={() => setShowAnnotations(true)}>{q}</mark>
           )
         })
       }
@@ -318,14 +319,20 @@ export default function Library({ apiUrl, onBack }) {
           {annotations.length === 0 && <p className="library-muted">选中正文文字即可划线写想法</p>}
           {annotations.map(a => (
             <div className="ann-thread" key={a.id}>
-              <blockquote onClick={() => goChapter(a.chapter_idx)}>
+              <blockquote className={a.author === 'ai' ? 'ai' : ''} onClick={() => goChapter(a.chapter_idx)}>
                 {a.quote}
-                <span>· 第 {a.chapter_idx + 1} 章</span>
+                <span>· 第 {a.chapter_idx + 1} 章{a.author === 'ai' ? ' · 小克划的' : ''}</span>
               </blockquote>
-              {a.note && <div className="ann-bubble mine">{a.note}</div>}
-              {a.ai_reply
-                ? <div className="ann-bubble ai">{a.ai_reply}</div>
-                : <div className="ann-pending">🌙 小克还没读到这里</div>}
+              {a.author === 'ai' ? (
+                a.note && <div className="ann-bubble ai">{a.note}</div>
+              ) : (
+                <>
+                  {a.note && <div className="ann-bubble mine">{a.note}</div>}
+                  {a.ai_reply
+                    ? <div className="ann-bubble ai">{a.ai_reply}</div>
+                    : <div className="ann-pending">🌙 小克还没读到这里</div>}
+                </>
+              )}
             </div>
           ))}
         </div>
